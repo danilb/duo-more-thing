@@ -194,7 +194,7 @@ struct SettingsPanel: View {
                 .foregroundStyle(.secondary)
 
             if settings.useEnvironmentBackground {
-                Text("The FaceTime camera photographs the room. The person is removed on-device and the blurred room is drawn behind the folding screen.")
+                Text("The FaceTime camera photographs the room; the person is removed on-device and the blurred room sits behind the folding screen. Without camera permission the desktop wallpaper is used instead.")
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
                     .fixedSize(horizontal: false, vertical: true)

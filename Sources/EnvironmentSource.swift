@@ -39,11 +39,16 @@ final class EnvironmentSource: NSObject, AVCaptureVideoDataOutputSampleBufferDel
     func requestPermission(explain: Bool = true) {
         let status = AVCaptureDevice.authorizationStatus(for: .video)
         if status == .notDetermined {
+            useWallpaperFallback(reason: "waiting for camera — using desktop wallpaper")
             NSApp.activate(ignoringOtherApps: true)
             AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
                 DispatchQueue.main.async {
-                    self?.publishStatus(granted ? "camera allowed — capturing…" : "camera permission denied")
-                    if granted { self?.refresh() }
+                    if granted {
+                        self?.publishStatus("camera allowed — capturing…")
+                        self?.refresh()
+                    } else {
+                        self?.useWallpaperFallback(reason: "no camera permission — using desktop wallpaper")
+                    }
                 }
             }
             return
@@ -52,13 +57,13 @@ final class EnvironmentSource: NSObject, AVCaptureVideoDataOutputSampleBufferDel
             refresh()
             return
         }
+        useWallpaperFallback(reason: "no camera permission — using desktop wallpaper")
         if explain {
             let alert = NSAlert()
             alert.messageText = "Camera permission required"
             alert.informativeText = """
             System Settings → Privacy & Security → Camera → enable Duo More Thing.
-            The camera takes a still of the room; the person is removed on-device \
-            and the blurred room becomes the space behind the folding screen.
+            Without it the desktop wallpaper is used as the space behind the fold.
             """
             alert.addButton(withTitle: "Open Settings")
             alert.addButton(withTitle: "Later")
@@ -68,7 +73,6 @@ final class EnvironmentSource: NSObject, AVCaptureVideoDataOutputSampleBufferDel
                 NSWorkspace.shared.open(url)
             }
         }
-        publishStatus("camera permission denied")
     }
 
     func clear() {
@@ -93,7 +97,7 @@ final class EnvironmentSource: NSObject, AVCaptureVideoDataOutputSampleBufferDel
             requestPermission(explain: false)
             return
         default:
-            publishStatus("camera permission denied")
+            useWallpaperFallback(reason: "no camera permission — using desktop wallpaper")
             return
         }
 
@@ -107,7 +111,7 @@ final class EnvironmentSource: NSObject, AVCaptureVideoDataOutputSampleBufferDel
     private func captureThenProcess() {
         defer { capturing = false }
         guard let device = cameraDevice() else {
-            publishStatus("no camera found")
+            useWallpaperFallback(reason: "no camera — using desktop wallpaper")
             return
         }
 
@@ -121,12 +125,12 @@ final class EnvironmentSource: NSObject, AVCaptureVideoDataOutputSampleBufferDel
         do {
             let input = try AVCaptureDeviceInput(device: device)
             guard session.canAddInput(input) else {
-                publishStatus("could not open the camera")
+                useWallpaperFallback(reason: "could not open the camera — using desktop wallpaper")
                 return
             }
             session.addInput(input)
         } catch {
-            publishStatus("camera: \(error.localizedDescription)")
+            useWallpaperFallback(reason: "camera unavailable — using desktop wallpaper")
             return
         }
 
@@ -135,7 +139,7 @@ final class EnvironmentSource: NSObject, AVCaptureVideoDataOutputSampleBufferDel
         output.videoSettings = [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]
         output.setSampleBufferDelegate(self, queue: frameQueue)
         guard session.canAddOutput(output) else {
-            publishStatus("could not read from the camera")
+            useWallpaperFallback(reason: "could not read the camera — using desktop wallpaper")
             return
         }
         session.addOutput(output)
@@ -163,7 +167,7 @@ final class EnvironmentSource: NSObject, AVCaptureVideoDataOutputSampleBufferDel
         self.frameWait = nil
 
         guard result == .success, let frame = grabbed else {
-            publishStatus("camera produced no frame")
+            useWallpaperFallback(reason: "camera produced no frame — using desktop wallpaper")
             return
         }
         grabbed = nil
@@ -271,6 +275,29 @@ final class EnvironmentSource: NSObject, AVCaptureVideoDataOutputSampleBufferDel
         DispatchQueue.main.async {
             AppModel.shared.environmentStatus = text
             AppModel.shared.hasCameraPermission = self.hasPermission
+        }
+    }
+
+    /// Blurred desktop picture — used when the camera isn't allowed or fails.
+    private func useWallpaperFallback(reason: String) {
+        guard Settings.shared.useEnvironmentBackground else { return }
+        processQueue.async { [weak self] in
+            guard let self else { return }
+            guard let wall = ScreenSource.desktopWallpaperImage() else {
+                self.publishStatus(reason)
+                return
+            }
+            let softened = self.soften(wall)
+            DispatchQueue.main.async {
+                guard Settings.shared.useEnvironmentBackground else { return }
+                self.image = softened
+                self.lastCapture = Date()
+                self.onImage?(softened)
+                AppModel.shared.environmentStatus = reason
+                AppModel.shared.hasCameraPermission = self.hasPermission
+                AppModel.shared.setEnvironmentPreview(softened)
+                AppModel.shared.renderPreview()
+            }
         }
     }
 }

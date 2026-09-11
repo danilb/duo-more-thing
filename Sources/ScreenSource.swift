@@ -132,7 +132,9 @@ final class ScreenSource {
 
     // MARK: - Fallback: desktop wallpaper
 
-    private func useWallpaper(for screen: NSScreen) {
+    /// The desktop picture, aspect-filled to the given screen (built-in if nil).
+    static func desktopWallpaperImage(for screen: NSScreen? = nil) -> CGImage? {
+        guard let screen = screen ?? builtInScreen else { return nil }
         let pixelSize = CGSize(width: screen.frame.width * screen.backingScaleFactor,
                                height: screen.frame.height * screen.backingScaleFactor)
         var source: CGImage?
@@ -148,11 +150,10 @@ final class ScreenSource {
                                       bytesPerRow: 0,
                                       space: CGColorSpaceCreateDeviceRGB(),
                                       bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
-        else { return }
+        else { return nil }
         context.setFillColor(CGColor(red: 0.07, green: 0.07, blue: 0.09, alpha: 1))
         context.fill(CGRect(origin: .zero, size: pixelSize))
         if let source {
-            // aspect fill
             let sw = CGFloat(source.width), sh = CGFloat(source.height)
             let scale = max(pixelSize.width / sw, pixelSize.height / sh)
             let w = sw * scale, h = sh * scale
@@ -160,11 +161,14 @@ final class ScreenSource {
                                             y: (pixelSize.height - h) / 2,
                                             width: w, height: h))
         }
-        if let cg = context.makeImage() {
-            let reason = Settings.shared.useScreenCapture
-                ? "no Screen Recording permission — showing the wallpaper instead"
-                : "source switched to wallpaper"
-            adopt(cg, real: false, note: reason)
-        }
+        return context.makeImage()
+    }
+
+    private func useWallpaper(for screen: NSScreen) {
+        guard let cg = ScreenSource.desktopWallpaperImage(for: screen) else { return }
+        let reason = Settings.shared.useScreenCapture
+            ? "no Screen Recording permission — showing the wallpaper instead"
+            : "source switched to wallpaper"
+        adopt(cg, real: false, note: reason)
     }
 }
