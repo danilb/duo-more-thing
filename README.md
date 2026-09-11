@@ -1,114 +1,127 @@
-# Duo More Thing — эффект складывания iPhone Duo на MacBook
+# Duo More Thing — the iPhone Duo fold effect on a MacBook
 
-Закрываешь крышку MacBook — интерфейс складывается вокруг нижнего края экрана:
-уходит в перспективу, размывается и растворяется в темноте, сильнее к верхнему
-краю, резко у «шарнира». Открываешь — разворачивается обратно. Всё привязано
-к реальному физическому углу крышки из встроенного датчика.
+Close the MacBook lid and the interface folds around the bottom edge of the
+screen: it recedes in perspective, blurs, and dissolves into the space behind
+it — harder toward the top, sharper at the hinge. Open the lid and it unfolds.
+The motion is driven by the real lid-angle sensor.
 
 | 20% | 40% | 80% |
 |---|---|---|
 | ![](docs/fold-20.png) | ![](docs/fold-40.png) | ![](docs/fold-80.png) |
 
-![панель настроек](docs/panel.png)
+![settings panel](docs/panel.png)
 
-## Сборка и запуск
+## Build and run
 
 ```bash
-./build.sh              # собрать в build/Duo More Thing.app
-./build.sh install      # собрать и положить в /Applications
+./build.sh              # build to build/Duo More Thing.app
+./build.sh install      # build and copy to /Applications
 ```
 
-Нужны Xcode Command Line Tools и macOS 26. Metal-тулчейн НЕ нужен — шейдер
-компилируется в рантайме из `Contents/Resources/Fold.metal`, его можно править
-прямо в бандле и просто перезапускать приложение.
+Requires Xcode Command Line Tools and macOS 26. A Metal toolchain is **not**
+required — the shader is compiled at runtime from `Contents/Resources/Fold.metal`,
+so you can edit it in the bundle and just relaunch.
 
-Приложение живёт в меню-баре и показывает текущий угол крышки.
+The app lives in the menu bar and shows the current lid angle.
 
-### Разрешение на запись экрана — обязательно
+### Screen Recording permission is required
 
-**Запускать `Duo More Thing.app` надо из Finder или Spotlight.** Если запустить его из
-терминала или из другого приложения, macOS припишет запрос разрешения
-родительскому процессу, и Duo More Thing в списке так и не появится.
+**Launch `Duo More Thing.app` from Finder or Spotlight.** If you start it from a
+terminal or another app, macOS attributes the permission prompt to the parent
+process, and Duo More Thing never appears in the list.
 
-При первом запуске система спросит разрешение сама. Если промахнулся — открой
-панель настроек (меню-бар → «Настройка эффекта…») и нажми «Дать разрешение на
-запись экрана», либо руками:
+On first launch the system asks on its own. If that was missed, open the
+settings panel (menu bar → Settings…) and click “Grant Screen Recording”, or
+enable it by hand:
+
 System Settings → Privacy & Security → Screen & System Audio Recording → Duo More Thing.
 
-Без разрешения приложение показывает **обои рабочего стола вместо интерфейса** —
-эффект работает, но выглядит так, будто интерфейс просто исчез. В панели
-настроек состояние источника видно всегда: зелёная плашка «живой экран» или
-оранжевая «обои».
+Without permission the app shows the **desktop wallpaper instead of the UI**.
+The effect still runs, but it looks as if the interface vanished. The settings
+panel always shows the source: a green “live screen” pill or an orange
+“wallpaper” pill.
 
-## Панель настроек
+## Settings panel
 
-Liquid Glass, живое превью эффекта со слайдером «Сложено на» — можно подбирать
-параметры, не трогая крышку.
+Liquid Glass, with a live preview of the effect and a “Folded by” slider so you
+can tune parameters without touching the lid.
 
-**Углы крышки** — с какого угла начинается эффект, при каком он полный,
-за сколько градусов до начала делается снимок экрана, инерция следования
-за датчиком, и через сколько секунд неподвижной *слегка* прикрытой крышки
-эффект отпускает экран (страховка, чтобы чуть прикрытой крышкой можно было
-пользоваться). Настоящий сгиб (сила ≥ 0.25) сам не пропадает; «never» на
-слайдере отключает страховку совсем.
+**Lid angles** — where the effect starts, where the fold is complete, how many
+degrees ahead the screenshot is taken, how quickly it follows the sensor, and
+how long a *slightly* closed still lid waits before releasing the screen
+(so you can still work with the lid a little down). A real fold (strength ≥ 0.25)
+never auto-releases; set the slider to **never** to turn the safety off entirely.
 
-**Размытие** — максимальный радиус, отдельно кривая отклика у верхнего края
-(меньше 1 — верх мылится сразу, как только начал закрывать) и кривая у шарнира
-(больше 1 — низ дольше держит резкость), форма градиента между ними.
+**Blur** — maximum radius, plus separate response curves for the far edge
+(below 1 blurs the top as soon as you start closing) and the hinge edge
+(above 1 keeps the bottom sharp longer), and the shape of the gradient between
+them.
 
-**Складывание в 3D** — наклон панели при полном сложении, кривая нарастания
-наклона, сила перспективы, и насколько боковые (и дальний) края панели
-растворяются в темноте.
+**3D fold** — panel tilt at a full fold, the tilt easing curve, perspective
+strength, and how hard the left/right (and far) rims dissolve into the void.
 
-**Тень** — глубина и момент начала затемнения.
+**Shadow** — depth and where the darkening begins.
 
-**Background** — по умолчанию включено «Room behind the fold»: FaceTime-камера снимает комнату перед ноутбуком, человек убирается на устройстве, дыра заливается окружающим фоном, снимок сильно размывается и рисуется *позади* складывающейся панели. Нет разрешения на камеру (или камера не открылась) — вместо чёрного берётся системный рабочий стол, тоже размытый. Выключи тумблер — снова чёрная пустота. Запускать приложение из Finder.
+**Background** — **Room behind the fold** is on by default. The FaceTime camera
+photographs the room in front of the laptop; the person is removed on-device;
+the hole is filled from the surrounding background; the still is heavily
+blurred and drawn *behind* the folding panel. If camera permission is missing
+(or the camera fails to open), the desktop wallpaper is used instead, also
+blurred. Turn the toggle off for a black void. Launch the app from Finder.
 
-## Ключи запуска (отладка)
+## Launch flags (debugging)
 
 ```bash
-open "build/Duo More Thing.app" --args --settings          # сразу открыть панель
-open "build/Duo More Thing.app" --args --preview           # проиграть анимацию через 1.5 с
-"./build/Duo More Thing.app/Contents/MacOS/DuoMoreThing" --hold 0.55        # зафиксировать силу эффекта
-"./build/Duo More Thing.app/Contents/MacOS/DuoMoreThing" --render-test ./out [картинка.png]   # 6 кадров в PNG
+open "build/Duo More Thing.app" --args --settings          # open the panel immediately
+open "build/Duo More Thing.app" --args --preview           # play the animation after 1.5 s
+"./build/Duo More Thing.app/Contents/MacOS/DuoMoreThing" --hold 0.55        # pin effect strength
+"./build/Duo More Thing.app/Contents/MacOS/DuoMoreThing" --render-test ./out [image.png]   # 6 PNG frames
 ```
 
-## Как это устроено
+## How it works
 
 `Sources/LidAngleSensor.swift`
-: Датчик угла крышки. IOKit HID, **feature report** (не input report):
+: Lid-angle sensor. IOKit HID, **feature report** (not input report):
   VendorID `0x05AC`, ProductID `0x8104`, UsagePage `0x20`, Usage `0x8A`,
-  reportID 1 → 3 байта `[0x01, lo, hi]`, угол = little-endian `UInt16` в градусах.
-  Есть на MacBook Pro 16" 2019 и новее. Проверено на MacBook Pro 14" M2 Pro.
+  reportID 1 → 3 bytes `[0x01, lo, hi]`, angle = little-endian `UInt16` in
+  degrees. Present on MacBook Pro 16" 2019 and later. Verified on a
+  MacBook Pro 14" M2 Pro.
 
 `Sources/ScreenSource.swift`
-: Снимок экрана через `SCScreenshotManager`. Снимок делается на «взводе» —
-  за `armLead` градусов до начала эффекта, пока оверлей ещё не показан, поэтому
-  приложение не снимает само себя. Фолбэк без разрешения — обои.
+: Screen capture via `SCScreenshotManager`. The frame is taken while
+  “arming” — `armLead` degrees before the effect starts, while the overlay is
+  still hidden, so the app never photographs itself. Fallback without
+  permission: the wallpaper.
+
+`Sources/EnvironmentSource.swift`
+: One-shot FaceTime still of the room. On-device person segmentation fills the
+  hole from the surrounding background; the result is blurred and used as the
+  space behind the panel. No camera: blurred desktop wallpaper.
 
 `Sources/OverlayController.swift`
-: Полноэкранное borderless-окно на уровне `CGShieldingWindowLevel` (выше
-  меню-бара и Dock), сквозное для мыши. Системный интерфейс публичными API
-  не размыть — поэтому поверх него кладётся замороженный кадр.
+: Full-screen borderless window at `CGShieldingWindowLevel` (above the menu
+  bar and Dock), mouse-transparent. Public APIs cannot blur the real system
+  UI, so a frozen frame is drawn on top of it.
 
 `Shaders/Fold.metal` + `Sources/FoldRenderer.swift`
-: Кадр рисуется как quad, повёрнутый вокруг нижнего края и спроецированный
-  перспективой. Проекция подобрана так, что при силе 0 панель совпадает
-  с экраном пиксель в пиксель, а дальше уходит вглубь в чёрную пустоту.
-  Переменный блюр — гауссова mip-пирамида (`MPSImageGaussianPyramid`) плюс
-  сэмплирование с явным LOD: `n = mix(s^hingeCurve, s^topCurve, d^shape)`,
-  две независимые кривые для дальнего края и края у шарнира.
+: The frame is a quad rotated around the bottom edge and projected in
+  perspective. The projection is chosen so that at strength 0 the panel
+  matches the screen pixel for pixel, then recedes into the space behind it.
+  Variable blur is a Gaussian mip pyramid (`MPSImageGaussianPyramid`) plus
+  explicit-LOD sampling: `n = mix(s^hingeCurve, s^topCurve, d^shape)` —
+  two independent curves for the far edge and the hinge edge. Panel rims
+  fade to the background via premultiplied alpha.
 
 `Sources/FoldController.swift`
-: Угол → сила → сглаживание → оверлей. Плюс страховка по неподвижной крышке.
+: Angle → strength → smoothing → overlay. Plus the still-lid safety.
 
 `Sources/SettingsPanel.swift`
-: SwiftUI + Liquid Glass, живое офскрин-превью эффекта.
+: SwiftUI + Liquid Glass, live offscreen preview of the effect.
 
-## Ограничения
+## Limitations
 
-- Эффект рисуется поверх замороженного кадра: пока он идёт, интерфейс не живой.
-  Это и есть суть анимации.
-- На экране блокировки macOS не даёт рисовать оверлей — анимация разворота после
-  сна отработает, только если система не успела залочиться.
-- Только встроенный дисплей.
+- The effect is drawn over a frozen frame: while it runs, the UI is not live.
+  That is the point of the animation.
+- macOS will not draw the overlay on the lock screen — the unfold after sleep
+  only plays if the system has not locked yet.
+- Built-in display only.
