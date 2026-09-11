@@ -20,6 +20,7 @@ swiftc -O \
   -target arm64-apple-macos26.0 \
   -framework AppKit -framework Metal -framework MetalKit \
   -framework MetalPerformanceShaders -framework ScreenCaptureKit -framework IOKit \
+  -framework AVFoundation -framework Vision -framework CoreImage -framework CoreVideo -framework CoreMedia \
   "$ROOT"/Sources/*.swift \
   -o "$APP/Contents/MacOS/DuoMoreThing"
 

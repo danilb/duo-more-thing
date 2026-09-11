@@ -14,13 +14,14 @@ struct SettingsPanel: View {
                 VStack(alignment: .leading, spacing: 16) {
                     status
                     preview
+                    backgroundCard
 
                     card("Lid angles") {
                         param("Effect starts at", $settings.startAngle, 30...170) { "\(Int($0))°" }
                         param("Fully folded at", $settings.endAngle, 5...120) { "\(Int($0))°" }
                         param("Capture ahead by", $settings.armLead, 5...60) { "\(Int($0))°" }
                         param("Follow speed", $settings.followSpeed, 4...60) { String(format: "%.0f", $0) }
-                        param("Release when still", $settings.releaseDelay, 0.5...15) {
+                        param("Release slight fold", $settings.releaseDelay, 0.5...15) {
                             $0 >= 15 ? "never" : String(format: "%.1f s", $0)
                         }
                     }
@@ -36,6 +37,7 @@ struct SettingsPanel: View {
                         param("Panel tilt", $settings.tiltAngle, 0...70) { "\(Int($0))°" }
                         param("Tilt curve", $settings.tiltCurve, 0.3...3) { String(format: "%.2f", $0) }
                         param("Perspective", $settings.depth, 0.8...6) { String(format: "%.1f", $0) }
+                        param("Side fade", $settings.sideFade, 0...2.5) { String(format: "%.2f", $0) }
                     }
 
                     card("Shadow") {
@@ -59,8 +61,24 @@ struct SettingsPanel: View {
             .scrollContentBackground(.hidden)
         }
         .background { backdrop }
+        .overlay(alignment: .top) { titlebarDragStrip }
         .frame(minWidth: 640, minHeight: 560)
         .preferredColorScheme(.dark)
+    }
+
+    /// Clicks in the transparent titlebar (to the right of the traffic lights)
+    /// still move the window. The rest of the panel must not — otherwise every
+    /// slider drag turns into a window drag.
+    private var titlebarDragStrip: some View {
+        HStack(spacing: 0) {
+            Color.clear.frame(width: 78)
+            Rectangle()
+                .fill(Color.white.opacity(0.001))
+                .contentShape(Rectangle())
+                .gesture(WindowDragGesture())
+        }
+        .frame(height: 52)
+        .ignoresSafeArea(.container, edges: .top)
     }
 
     /// A blurred screen capture behind the glass — glass needs something to refract.
@@ -149,12 +167,58 @@ struct SettingsPanel: View {
             HStack {
                 Text("Folded by")
                     .frame(width: 110, alignment: .leading)
-                Slider(value: $model.previewStrength, in: 0...1)
-                    .onChange(of: model.previewStrength) { _, _ in AppModel.shared.schedulePreview() }
+                MacSlider(value: $model.previewStrength, range: 0...1) {
+                    AppModel.shared.schedulePreview()
+                }
                 Text("\(Int(model.previewStrength * 100))%")
                     .monospacedDigit()
                     .foregroundStyle(.secondary)
                     .frame(width: 52, alignment: .trailing)
+            }
+        }
+    }
+
+    // MARK: Room background
+
+    private var backgroundCard: some View {
+        card("Background") {
+            HStack {
+                Toggle("Room behind the fold", isOn: $settings.useEnvironmentBackground)
+                    .toggleStyle(.switch)
+                Spacer()
+            }
+            Text(settings.useEnvironmentBackground
+                 ? model.environmentStatus
+                 : "off — the fold recedes into black")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            if settings.useEnvironmentBackground {
+                Text("The FaceTime camera photographs the room. The person is removed on-device and the blurred room is drawn behind the folding screen.")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if let image = model.environmentPreview {
+                    Image(nsImage: image)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(maxHeight: 140)
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                }
+
+                HStack(spacing: 10) {
+                    if !model.hasCameraPermission {
+                        Button("Grant Camera") {
+                            EnvironmentSource.shared.requestPermission(explain: true)
+                        }
+                        .buttonStyle(.glassProminent)
+                    }
+                    Button("Recapture room") {
+                        EnvironmentSource.shared.refresh()
+                    }
+                    .buttonStyle(.glass)
+                }
             }
         }
     }
@@ -182,8 +246,9 @@ struct SettingsPanel: View {
             Text(title)
                 .font(.system(size: 12))
                 .frame(width: 150, alignment: .leading)
-            Slider(value: value, in: range)
-                .onChange(of: value.wrappedValue) { _, _ in AppModel.shared.schedulePreview() }
+            MacSlider(value: value, range: range) {
+                AppModel.shared.schedulePreview()
+            }
             Text(format(value.wrappedValue))
                 .font(.system(size: 11))
                 .monospacedDigit()
@@ -202,6 +267,60 @@ struct SettingsPanel: View {
     }
 }
 
+// MARK: - AppKit slider
+
+/// SwiftUI `Slider` is not an `NSControl`, so with a movable-background window
+/// AppKit treats the drag as “move the window”. A real `NSSlider` keeps the
+/// mouse for itself.
+private struct MacSlider: NSViewRepresentable {
+    @Binding var value: Double
+    var range: ClosedRange<Double>
+    var onChanging: () -> Void
+
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+
+    func makeNSView(context: Context) -> NSSlider {
+        let slider = NSSlider(value: value,
+                              minValue: range.lowerBound,
+                              maxValue: range.upperBound,
+                              target: context.coordinator,
+                              action: #selector(Coordinator.changed(_:)))
+        slider.isContinuous = true
+        slider.controlSize = .small
+        slider.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        slider.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        return slider
+    }
+
+    func updateNSView(_ slider: NSSlider, context: Context) {
+        context.coordinator.parent = self
+        if abs(slider.doubleValue - value) > 0.0001 {
+            slider.doubleValue = value
+        }
+        slider.minValue = range.lowerBound
+        slider.maxValue = range.upperBound
+    }
+
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSSlider, context: Context) -> CGSize {
+        CGSize(width: proposal.width ?? 120,
+               height: max(nsView.intrinsicContentSize.height, 16))
+    }
+
+    final class Coordinator: NSObject {
+        var parent: MacSlider
+        init(_ parent: MacSlider) { self.parent = parent }
+
+        @objc func changed(_ sender: NSSlider) {
+            parent.value = sender.doubleValue
+            parent.onChanging()
+        }
+    }
+}
+
+private final class SettingsHostingView<Content: View>: NSHostingView<Content> {
+    override var mouseDownCanMoveWindow: Bool { false }
+}
+
 // MARK: - Window
 
 final class SettingsWindowController: NSWindowController {
@@ -215,10 +334,10 @@ final class SettingsWindowController: NSWindowController {
         window.title = "Duo More Thing"
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
-        window.isMovableByWindowBackground = true
+        window.isMovableByWindowBackground = false
         window.isReleasedWhenClosed = false
         window.appearance = NSAppearance(named: .darkAqua)
-        window.contentView = NSHostingView(rootView: SettingsPanel())
+        window.contentView = SettingsHostingView(rootView: SettingsPanel())
         self.init(window: window)
 
         // Any settings change redraws the preview.
@@ -232,6 +351,9 @@ final class SettingsWindowController: NSWindowController {
         if window?.isVisible != true { window?.center() }
         showWindow(nil)
         window?.makeKeyAndOrderFront(nil)
+        if Settings.shared.useEnvironmentBackground, EnvironmentSource.shared.image == nil {
+            EnvironmentSource.shared.refresh()
+        }
         AppModel.shared.renderPreview()
     }
 }

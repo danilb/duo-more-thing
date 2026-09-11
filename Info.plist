@@ -12,5 +12,7 @@
     <key>LSMinimumSystemVersion</key><string>26.0</string>
     <key>LSUIElement</key><true/>
     <key>NSHighResolutionCapable</key><true/>
+    <key>NSCameraUsageDescription</key>
+    <string>Duo More Thing photographs the room in front of you, removes the person on-device, and uses the blurred room as the space behind the folding screen.</string>
 </dict>
 </plist>

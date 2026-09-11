@@ -14,6 +14,9 @@ final class AppModel: ObservableObject {
     @Published var sourceIsRealScreen = false
     @Published var lastCaptureAt: Date?
     @Published var hasScreenRecording = false
+    @Published var hasCameraPermission = false
+    @Published var environmentStatus: String = "room not captured yet"
+    @Published var environmentPreview: NSImage?
 
     /// Effect preview shown in the settings panel.
     @Published var previewStrength: Double = 0.35
@@ -35,6 +38,8 @@ final class AppModel: ObservableObject {
         self.strength = strength
         let permission = ScreenSource.shared.hasScreenRecordingPermission
         if permission != hasScreenRecording { hasScreenRecording = permission }
+        let camera = EnvironmentSource.shared.hasPermission
+        if camera != hasCameraPermission { hasCameraPermission = camera }
     }
 
     /// Redraw the preview with a small delay so dragging a slider doesn't hammer the GPU.
@@ -57,6 +62,21 @@ final class AppModel: ObservableObject {
         context.draw(cg, in: CGRect(x: 0, y: 0, width: width, height: height))
         if let small = context.makeImage() {
             backdrop = NSImage(cgImage: small, size: NSSize(width: width, height: height))
+        }
+    }
+
+    func setEnvironmentPreview(_ cg: CGImage) {
+        let width = 280
+        let height = max(1, Int(Double(width) * Double(cg.height) / Double(cg.width)))
+        guard let context = CGContext(data: nil, width: width, height: height,
+                                      bitsPerComponent: 8, bytesPerRow: 0,
+                                      space: CGColorSpaceCreateDeviceRGB(),
+                                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+        else { return }
+        context.interpolationQuality = .medium
+        context.draw(cg, in: CGRect(x: 0, y: 0, width: width, height: height))
+        if let small = context.makeImage() {
+            environmentPreview = NSImage(cgImage: small, size: NSSize(width: width, height: height))
         }
     }
 

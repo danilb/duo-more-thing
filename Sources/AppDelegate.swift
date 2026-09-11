@@ -35,6 +35,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         // Prepare the first frame up front.
         ScreenSource.shared.refresh()
+        if Settings.shared.useEnvironmentBackground {
+            EnvironmentSource.shared.requestPermission(explain: false)
+        }
 
         // Debug: --hold 0.55 pins the effect strength so the lid can stay put.
         if let index = CommandLine.arguments.firstIndex(of: "--hold"),

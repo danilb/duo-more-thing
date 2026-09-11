@@ -17,7 +17,8 @@ final class Settings: ObservableObject {
     @Published var armLead: Double { didSet { save(armLead, "armLead") } }
     /// How quickly the effect follows the sensor.
     @Published var followSpeed: Double { didSet { save(followSpeed, "followSpeed") } }
-    /// Seconds of a motionless lid before the effect releases the screen. 15 or more means never.
+    /// Seconds of a motionless *slight* fold before the overlay drops.
+    /// A real fold (strength ≥ 0.25) is never auto-released. 15+ means never.
     @Published var releaseDelay: Double { didSet { save(releaseDelay, "releaseDelay") } }
 
     // MARK: - Blur
@@ -44,11 +45,24 @@ final class Settings: ObservableObject {
     @Published var tiltCurve: Double { didSet { save(tiltCurve, "tiltCurve") } }
     /// Camera distance: smaller means stronger perspective.
     @Published var depth: Double { didSet { save(depth, "depth") } }
+    /// How hard the left/right rims of the tilted panel dissolve into the void.
+    @Published var sideFade: Double { didSet { save(sideFade, "sideFade") } }
 
     // MARK: - Misc
 
     @Published var useScreenCapture: Bool { didSet { save(useScreenCapture, "useScreenCapture") } }
     @Published var effectEnabled: Bool { didSet { save(effectEnabled, "effectEnabled") } }
+    /// Photograph the room, remove the person, use the blurred room behind the fold.
+    @Published var useEnvironmentBackground: Bool {
+        didSet {
+            save(useEnvironmentBackground, "useEnvironmentBackground")
+            if useEnvironmentBackground {
+                EnvironmentSource.shared.refresh()
+            } else {
+                EnvironmentSource.shared.clear()
+            }
+        }
+    }
 
     private init() {
         func number(_ key: String, _ fallback: Double) -> Double {
@@ -63,7 +77,15 @@ final class Settings: ObservableObject {
         endAngle = number("endAngle", 18)
         armLead = number("armLead", 20)
         followSpeed = number("followSpeed", 26)
-        releaseDelay = number("releaseDelay", 2.5)
+        // Old factory default of 2.5s made a held fold vanish. Bump it once.
+        if defaults.object(forKey: "releaseDelayMigrated") == nil {
+            if defaults.object(forKey: "releaseDelay") != nil,
+               abs(defaults.double(forKey: "releaseDelay") - 2.5) < 0.05 {
+                defaults.set(8.0, forKey: "releaseDelay")
+            }
+            defaults.set(true, forKey: "releaseDelayMigrated")
+        }
+        releaseDelay = number("releaseDelay", 8)
         maxLod = number("maxLod", 7.2)
         topCurve = number("topCurve", 0.45)
         hingeCurve = number("hingeCurve", 4.5)
@@ -73,8 +95,10 @@ final class Settings: ObservableObject {
         tiltAngle = number("tiltAngle", 38)
         tiltCurve = number("tiltCurve", 1.3)
         depth = number("depth", 2.2)
+        sideFade = number("sideFade", 1.0)
         useScreenCapture = flag("useScreenCapture", true)
         effectEnabled = flag("effectEnabled", true)
+        useEnvironmentBackground = flag("useEnvironmentBackground", true)
     }
 
     private func save(_ value: Double, _ key: String) { defaults.set(value, forKey: key) }
@@ -82,14 +106,14 @@ final class Settings: ObservableObject {
 
     func resetEffectParameters() {
         for key in ["maxLod", "topCurve", "hingeCurve", "shape", "darkness", "darkStart",
-                    "tiltAngle", "tiltCurve", "depth", "startAngle", "endAngle",
+                    "tiltAngle", "tiltCurve", "depth", "sideFade", "startAngle", "endAngle",
                     "armLead", "followSpeed", "releaseDelay"] {
             defaults.removeObject(forKey: key)
         }
-        startAngle = 100; endAngle = 18; armLead = 20; followSpeed = 26; releaseDelay = 2.5
+        startAngle = 100; endAngle = 18; armLead = 20; followSpeed = 26; releaseDelay = 8
         maxLod = 7.2; topCurve = 0.45; hingeCurve = 4.5; shape = 1.6
         darkness = 0.97; darkStart = 0.45
-        tiltAngle = 38; tiltCurve = 1.3; depth = 2.2
+        tiltAngle = 38; tiltCurve = 1.3; depth = 2.2; sideFade = 1.0
     }
 
     /// Lid angle to effect strength, 0…1.

@@ -67,6 +67,10 @@ final class OverlayController {
         renderer?.setImage(cg)
     }
 
+    func setBackground(_ cg: CGImage?) {
+        renderer?.setBackground(cg)
+    }
+
     var hasImage: Bool { renderer?.hasImage ?? false }
 
     /// Main entry point: effect strength, 0…1.

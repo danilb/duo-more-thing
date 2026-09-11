@@ -37,12 +37,18 @@ final class FoldController {
         ScreenSource.shared.onImage = { [weak self] image in
             self?.overlay.setImage(image)
         }
+        EnvironmentSource.shared.onImage = { [weak self] image in
+            self?.overlay.setBackground(image)
+        }
         let center = NSWorkspace.shared.notificationCenter
         center.addObserver(forName: NSWorkspace.screensDidWakeNotification,
                            object: nil, queue: .main) { [weak self] _ in
             // After waking the frame is stale — refresh so the unfold shows current content.
             self?.armed = true
             ScreenSource.shared.refresh()
+            if Settings.shared.useEnvironmentBackground {
+                EnvironmentSource.shared.refresh()
+            }
             _ = self
         }
     }
@@ -56,12 +62,21 @@ final class FoldController {
 
     func runPreview() {
         ensureImage()
+        ensureEnvironment()
         previewStart = CACurrentMediaTime()
     }
 
     private func ensureImage() {
         if !overlay.hasImage || Date().timeIntervalSince(ScreenSource.shared.lastCapture) > 1.0 {
             ScreenSource.shared.refresh()
+        }
+    }
+
+    private func ensureEnvironment() {
+        guard Settings.shared.useEnvironmentBackground else { return }
+        if EnvironmentSource.shared.image == nil
+            || Date().timeIntervalSince(EnvironmentSource.shared.lastCapture) > 8 {
+            EnvironmentSource.shared.refresh()
         }
     }
 
@@ -89,16 +104,20 @@ final class FoldController {
         } else if let manual = manualOverride {
             targetStrength = manual
         } else if settings.effectEnabled && sensor.isAvailable {
-            // The lid has been still for a while — release the screen so it stays usable.
+            // Insurance: a *slight* fold that then sits still drops the overlay so the
+            // screen stays usable (working with the lid a little closed). A real fold
+            // is the effect — holding it must not make the panel vanish.
+            let liveStrength = settings.strength(forAngle: angle)
             if abs(angle - lastMovementAngle) > 1.0 {
                 lastMovementAngle = angle
                 lastMovementTime = now
                 released = false
             } else if settings.releaseDelay < 15,
-                      now - lastMovementTime > settings.releaseDelay {
+                      now - lastMovementTime > settings.releaseDelay,
+                      liveStrength < 0.25 {
                 released = true
             }
-            targetStrength = released ? 0 : settings.strength(forAngle: angle)
+            targetStrength = released ? 0 : liveStrength
 
             // Arming. A fresh frame is captured once per closing motion, while the
             // overlay is still hidden — otherwise the app would capture itself.
@@ -118,6 +137,9 @@ final class FoldController {
                     if !armed && angle < settings.startAngle + settings.armLead {
                         armed = true
                         ScreenSource.shared.refresh(minInterval: 0.3)
+                        if settings.useEnvironmentBackground {
+                            EnvironmentSource.shared.refresh(minInterval: 3)
+                        }
                     }
                 } else if now - lastClosingTime > 0.6 {
                     armed = false                    // motion stopped, ready for the next one
